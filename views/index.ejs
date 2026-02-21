@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Todo System Level 3</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style> .done-text { text-decoration: line-through; color: #adb5bd; } </style>
+</head>
+<body class="bg-light p-4">
+    <div class="container bg-white shadow p-4 rounded" style="max-width: 800px;">
+        <h2 class="text-center text-primary mb-4">QUẢN LÝ CÔNG VIỆC</h2>
+
+        <div class="mb-4">
+            <label class="fw-bold">Tiến độ hoàn thành: <%= progress %>%</label>
+            <div class="progress" style="height: 20px;">
+                <div class="progress-bar bg-success" style="width: <%= progress %>%"></div>
+            </div>
+        </div>
+
+        <div class="card p-3 mb-4 bg-light">
+            <form action="/tasks/add" method="POST">
+                <input type="text" name="title" class="form-control mb-3" placeholder="Tên công việc..." required>
+                <label class="fw-bold small">Giao cho (Phân quyền Admin):</label>
+                <div class="bg-white border rounded p-2 mb-3" style="max-height: 120px; overflow-y: auto;">
+                    <% users.forEach(u => { %>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="assignedUsers" value="<%= u._id %>" id="<%= u._id %>">
+                            <label class="form-check-label" for="<%= u._id %>"><%= u.fullName %> (<%= u.role %>)</label>
+                        </div>
+                    <% }) %>
+                </div>
+                <button class="btn btn-primary w-100">THÊM TASK</button>
+            </form>
+        </div>
+
+        <ul class="list-group">
+            <% tasks.forEach(task => { %>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="<%= task.isDone ? 'done-text' : '' %> mb-1"><%= task.title %></h6>
+                        <small class="text-muted d-block">👥 Phụ trách: <%= task.assignedUsers.map(u => u.fullName).join(', ') %></small>
+                        <% if(task.isDone) { %>
+                            <span class="badge bg-info text-dark">Hoàn thành lúc: <%= task.doneAt.toLocaleString('vi-VN') %></span>
+                        <% } else { %>
+                            <small class="text-primary">Tiến độ: <%= task.completedUsers.length %>/<%= task.assignedUsers.length %></small>
+                        <% } %>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <% if(!task.isDone) { %>
+                            <form action="/tasks/complete/<%= task._id %>" method="POST" class="d-flex gap-1">
+                                <select name="userId" class="form-select form-select-sm" style="width: 120px;">
+                                    <% task.assignedUsers.forEach(u => { %>
+                                        <option value="<%= u._id %>"><%= u.fullName %></option>
+                                    <% }) %>
+                                </select>
+                                <button class="btn btn-sm btn-success">Xong</button>
+                            </form>
+                        <% } %>
+                        <form action="/tasks/delete/<%= task._id %>" method="POST">
+                            <button class="btn btn-sm btn-outline-danger">Xóa</button>
+                        </form>
+                    </div>
+                </li>
+            <% }) %>
+        </ul>
+    </div>
+</body>
+</html>
