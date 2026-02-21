@@ -26,7 +26,35 @@ app.post('/api/register', async (req, res) => {
         res.status(400).json({ error: "Lỗi đăng ký (có thể trùng username)" });
     }
 });
+// API Login
+app.post('/api/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
 
+        const user = await User.findOne({ username });
+        if (!user) {
+            return res.status(400).json({ error: "Sai username hoặc password" });
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ error: "Sai username hoặc password" });
+        }
+
+        res.json({
+            message: "Đăng nhập thành công",
+            user: {
+                id: user._id,
+                username: user.username,
+                fullName: user.fullName,
+                role: user.role
+            }
+        });
+
+    } catch (err) {
+        res.status(500).json({ error: "Lỗi server" });
+    }
+});
 // API Xuất task của user họ Nguyễn
 app.get('/api/tasks/nguyen', async (req, res) => {
     const nguyenUsers = await User.find({ fullName: { $regex: /Nguyễn/i } });
