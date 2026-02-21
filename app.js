@@ -1,13 +1,18 @@
-const express = require('express');
+const session = require('express-session');const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const User = require('./models/User');
 const Task = require('./models/Task');
+const User = require('./models/User');
 
 const app = express();
 app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(session({
+    secret: 'todo-secret-key',
+    resave: false,
+    saveUninitialized: false
+}));
 
 // Kết nối database todoDB
 mongoose.connect('mongodb://127.0.0.1:27017/todo_app')
@@ -27,34 +32,50 @@ app.post('/api/register', async (req, res) => {
     }
 });
 // API Login
-app.post('/api/login', async (req, res) => {
+app.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
 
         const user = await User.findOne({ username });
         if (!user) {
-            return res.status(400).json({ error: "Sai username hoặc password" });
+            return res.send("Sai username hoặc password");
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.status(400).json({ error: "Sai username hoặc password" });
+            return res.send("Sai username hoặc password");
         }
 
-        res.json({
-            message: "Đăng nhập thành công",
-            user: {
-                id: user._id,
-                username: user.username,
-                fullName: user.fullName,
-                role: user.role
-            }
-        });
+        // Lưu session
+        req.session.user = {
+            id: user._id,
+            username: user.username,
+            fullName: user.fullName,
+            role: user.role
+        };
 
+        res.redirect('/');
     } catch (err) {
-        res.status(500).json({ error: "Lỗi server" });
+        res.send("Lỗi server");
     }
 });
+app.get('/login', (req, res) => {
+    res.render('login');
+});
+
+function isAuthenticated(req, res, next) {
+    if (!req.session.user) {
+        return res.redirect('/login');
+    }
+    next();
+}
+
+function isAdmin(req, res, next) {
+    if (req.session.user.role !== 'admin') {
+        return res.send("Bạn không có quyền truy cập");
+    }
+    next();
+}
 // API Lấy tất cả task
 app.get('/api/tasks', async (req, res) => {
     try {
@@ -193,20 +214,24 @@ app.patch('/api/tasks/:taskId/complete', async (req, res) => {
 });
 // --- LEVEL 2 & 3: Web UI & Logic ---
 
-app.get('/', async (req, res) => {
+app.get('/', isAuthenticated, async (req, res) => {
     const tasks = await Task.find().populate('assignedUsers');
     const users = await User.find();
     
-    // Tính % Progress Bar
     const total = tasks.length;
     const done = tasks.filter(t => t.isDone).length;
     const progress = total > 0 ? Math.round((done / total) * 100) : 0;
 
-    res.render('index', { tasks, users, progress });
+    res.render('index', { 
+        tasks, 
+        users, 
+        progress,
+        currentUser: req.session.user
+    });
 });
 
 // Thêm Task mới (Admin phân quyền)
-app.post('/tasks/add', async (req, res) => {
+app.post('/tasks/add', isAuthenticated, isAdmin, async (req, res) => {
     const { title, assignedUsers } = req.body;
     const assignees = Array.isArray(assignedUsers) ? assignedUsers : (assignedUsers ? [assignedUsers] : []);
     await Task.create({ title, assignedUsers: assignees });
@@ -214,19 +239,39 @@ app.post('/tasks/add', async (req, res) => {
 });
 
 // Hoàn thành task (Ghi nhận thời gian doneAt khi đủ người)
-app.post('/tasks/complete/:taskId', async (req, res) => {
-    const { userId } = req.body;
+
+app.post('/tasks/complete/:taskId', isAuthenticated, async (req, res) => {
+    const userId = req.session.user.id;
+    const userRole = req.session.user.role;
+
     const task = await Task.findById(req.params.taskId);
 
-    if (userId && !task.completedUsers.includes(userId)) {
+    if (!task) {
+        return res.send("Task không tồn tại");
+    }
+
+    // Nếu không phải admin và không được giao task → chặn
+    if (
+        userRole !== 'admin' &&
+        !task.assignedUsers.some(id => id.toString() === userId)
+    ) {
+        return res.send("Bạn không được giao task này");
+    }
+
+    // Nếu chưa hoàn thành thì thêm vào completedUsers
+    if (!task.completedUsers.some(id => id.toString() === userId)) {
         task.completedUsers.push(userId);
     }
 
-    // Nếu tất cả người được giao đã xác nhận xong
-    if (task.completedUsers.length >= task.assignedUsers.length && task.assignedUsers.length > 0) {
+    // Nếu tất cả user đã hoàn thành → đánh dấu xong
+    if (
+        task.completedUsers.length >= task.assignedUsers.length &&
+        task.assignedUsers.length > 0
+    ) {
         task.isDone = true;
-        task.doneAt = new Date(); // Ghi nhận thời gian hoàn thành
+        task.doneAt = new Date();
     }
+
     await task.save();
     res.redirect('/');
 });
@@ -235,6 +280,11 @@ app.post('/tasks/complete/:taskId', async (req, res) => {
 app.post('/tasks/delete/:id', async (req, res) => {
     await Task.findByIdAndDelete(req.params.id);
     res.redirect('/');
+});
+app.get('/logout', (req, res) => {
+    req.session.destroy(() => {
+        res.redirect('/login');
+    });
 });
 
 app.listen(3000, () => console.log('🚀 Server: http://localhost:3000'));

@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
@@ -9,29 +10,57 @@
 <body class="bg-light p-4">
     <div class="container bg-white shadow p-4 rounded" style="max-width: 800px;">
         <h2 class="text-center text-primary mb-4">QUẢN LÝ CÔNG VIỆC</h2>
-
+        <div class="text-end mb-3">
+            Xin chào: <b><%= currentUser.fullName %></b> 
+            (<%= currentUser.role %>)
+            <a href="/logout" class="btn btn-sm btn-outline-danger ms-2">Logout</a>
+        </div>
         <div class="mb-4">
             <label class="fw-bold">Tiến độ hoàn thành: <%= progress %>%</label>
             <div class="progress" style="height: 20px;">
                 <div class="progress-bar bg-success" style="width: <%= progress %>%"></div>
             </div>
         </div>
-
-        <div class="card p-3 mb-4 bg-light">
-            <form action="/tasks/add" method="POST">
-                <input type="text" name="title" class="form-control mb-3" placeholder="Tên công việc..." required>
-                <label class="fw-bold small">Giao cho (Phân quyền Admin):</label>
-                <div class="bg-white border rounded p-2 mb-3" style="max-height: 120px; overflow-y: auto;">
-                    <% users.forEach(u => { %>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="assignedUsers" value="<%= u._id %>" id="<%= u._id %>">
-                            <label class="form-check-label" for="<%= u._id %>"><%= u.fullName %> (<%= u.role %>)</label>
-                        </div>
-                    <% }) %>
-                </div>
-                <button class="btn btn-primary w-100">THÊM TASK</button>
-            </form>
-        </div>
+        <% if(currentUser.role === 'admin') { %>
+            <div class="card p-3 mb-4 bg-light">
+                <form action="/tasks/add" method="POST">
+            
+                    <input type="text" 
+                           name="title" 
+                           class="form-control mb-3" 
+                           placeholder="Tên công việc..." 
+                           required>
+            
+                    <label class="fw-bold small">
+                        Giao cho (Phân quyền Admin):
+                    </label>
+            
+                    <div class="bg-white border rounded p-2 mb-3" 
+                         style="max-height: 120px; overflow-y: auto;">
+            
+                        <% users.forEach(u => { %>
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="assignedUsers"
+                                       value="<%= u._id %>">
+            
+                                <label class="form-check-label">
+                                    <%= u.fullName %> (<%= u.role %>)
+                                </label>
+                            </div>
+                        <% }) %>
+            
+                    </div>
+            
+                    <button type="submit" 
+                            class="btn btn-primary w-100">
+                        THÊM TASK
+                    </button>
+            
+                </form>
+            </div>
+            <% } %>
 
         <ul class="list-group">
             <% tasks.forEach(task => { %>
