@@ -250,22 +250,25 @@ app.post('/tasks/complete/:taskId', isAuthenticated, async (req, res) => {
         return res.send("Task không tồn tại");
     }
 
-    // Nếu không phải admin và không được giao task → chặn
+    // Normal chỉ được hoàn thành nếu được giao task
     if (
-        userRole !== 'admin' &&
+        userRole === 'normal' &&
         !task.assignedUsers.some(id => id.toString() === userId)
     ) {
         return res.send("Bạn không được giao task này");
     }
 
-    // Nếu chưa hoàn thành thì thêm vào completedUsers
-    if (!task.completedUsers.some(id => id.toString() === userId)) {
-        task.completedUsers.push(userId);
+    // Không cho bấm 2 lần
+    if (task.completedUsers.some(id => id.toString() === userId)) {
+        return res.send("Bạn đã hoàn thành rồi");
     }
 
-    // Nếu tất cả user đã hoàn thành → đánh dấu xong
+    // Thêm chính user hiện tại vào danh sách hoàn thành
+    task.completedUsers.push(userId);
+
+    // Nếu tất cả đã hoàn thành
     if (
-        task.completedUsers.length >= task.assignedUsers.length &&
+        task.completedUsers.length === task.assignedUsers.length &&
         task.assignedUsers.length > 0
     ) {
         task.isDone = true;
@@ -275,7 +278,6 @@ app.post('/tasks/complete/:taskId', isAuthenticated, async (req, res) => {
     await task.save();
     res.redirect('/');
 });
-
 // Xóa Task
 app.post('/tasks/delete/:id', async (req, res) => {
     await Task.findByIdAndDelete(req.params.id);
