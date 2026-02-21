@@ -55,13 +55,142 @@ app.post('/api/login', async (req, res) => {
         res.status(500).json({ error: "Lỗi server" });
     }
 });
-// API Xuất task của user họ Nguyễn
-app.get('/api/tasks/nguyen', async (req, res) => {
-    const nguyenUsers = await User.find({ fullName: { $regex: /Nguyễn/i } });
-    const tasks = await Task.find({ assignedUsers: { $in: nguyenUsers.map(u => u._id) } }).populate('assignedUsers');
-    res.json(tasks);
+// API Lấy tất cả task
+app.get('/api/tasks', async (req, res) => {
+    try {
+        const tasks = await Task.find().populate('assignedUsers');
+        res.json(tasks);
+    } catch (err) {
+        res.status(500).json({ error: "Lỗi server" });
+    }
+});
+app.get('/api/tasks/user/:username', async (req, res) => {
+    try {
+        const { username } = req.params;
+
+        // 1️⃣ Tìm user
+        const user = await User.findOne({ username });
+        if (!user) {
+            return res.status(404).json({ error: "User không tồn tại" });
+        }
+
+        // 2️⃣ Lấy task của user đó
+        const tasks = await Task.find({
+            assignedUsers: user._id
+        }).populate('assignedUsers');
+
+        res.json(tasks);
+
+    } catch (err) {
+        console.error("ERROR:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+app.get('/api/tasks/today', async (req, res) => {
+    try {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0); // 00:00:00 hôm nay
+
+        const end = new Date();
+        end.setHours(23, 59, 59, 999); // 23:59:59 hôm nay
+
+        const tasks = await Task.find({
+            createdAt: {
+                $gte: start,
+                $lte: end
+            }
+        });
+
+        console.log("TASK TODAY:", tasks);
+
+        res.json(tasks);
+    } catch (err) {
+        res.status(500).json({ error: "Lỗi server" });
+    }
 });
 
+app.get('/api/tasks/undone', async (req, res) => {
+    try {
+        const tasks = await Task.find({ isDone: false });
+        res.json(tasks);
+    } catch (err) {
+        res.status(500).json({ error: "Lỗi server" });
+    }
+});
+// API Xuất task của user họ Nguyễn
+app.get('/api/tasks/lastname/nguyen', async (req, res) => {
+    try {
+        // 1️⃣ Tìm user họ Nguyễn (không phân biệt hoa thường)
+        const users = await User.find({
+            username: { $regex: /^nguyen/i }
+        });
+
+        if (users.length === 0) {
+            return res.json([]);
+        }
+
+        // 2️⃣ Lấy danh sách _id
+        const userIds = users.map(user => user._id);
+
+        // 3️⃣ Tìm task có assignedUsers thuộc các user đó
+        const tasks = await Task.find({
+            assignedUsers: { $in: userIds }
+        }).populate('assignedUsers');
+
+        res.json(tasks);
+
+    } catch (err) {
+        res.status(500).json({ error: "Lỗi server" });
+    }
+});
+
+app.post('/api/tasks', async (req, res) => {
+    try {
+        const { title, assignedUsernames } = req.body;
+
+        if (!title) {
+            return res.status(400).json({ error: "Thiếu title" });
+        }
+
+        // 1️⃣ Tìm user theo username
+        const users = await User.find({
+            username: { $in: assignedUsernames }
+        });
+
+        const userIds = users.map(user => user._id);
+
+        // 2️⃣ Tạo task
+        const newTask = await Task.create({
+            title,
+            assignedUsers: userIds
+        });
+
+        res.status(201).json(newTask);
+
+    } catch (err) {
+        res.status(500).json({ error: "Lỗi server" });
+    }
+});
+app.patch('/api/tasks/:taskId/complete', async (req, res) => {
+    try {
+        const { taskId } = req.params;
+
+        const task = await Task.findById(taskId);
+        if (!task) {
+            return res.status(404).json({ error: "Task không tồn tại" });
+        }
+
+        task.isDone = true;
+        task.doneAt = new Date();
+
+        await task.save();
+
+        res.json(task);
+
+    } catch (err) {
+        res.status(500).json({ error: "Lỗi server" });
+    }
+});
 // --- LEVEL 2 & 3: Web UI & Logic ---
 
 app.get('/', async (req, res) => {
